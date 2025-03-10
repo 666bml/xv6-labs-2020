@@ -84,8 +84,7 @@ stat(const char *n, struct stat *st)
   return r;
 }
 
-int
-atoi(const char *s)
+int atoi(const char *s)
 {
   int n;
 
