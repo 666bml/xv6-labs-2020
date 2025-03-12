@@ -23,6 +23,16 @@ struct {
   struct run *freelist;
 } kmem;
 
+// 新增一个全局变量，用来记录当前空闲页数量
+int free_page_count = 0;
+
+// 返回空闲内存的字节数
+uint64
+kfreemem(void)
+{
+  return (uint64)free_page_count * PGSIZE;
+}
+
 void
 kinit()
 {
@@ -59,6 +69,7 @@ kfree(void *pa)
   acquire(&kmem.lock);
   r->next = kmem.freelist;
   kmem.freelist = r;
+  free_page_count++;  // <--- 释放一页，自增
   release(&kmem.lock);
 }
 
@@ -72,8 +83,10 @@ kalloc(void)
 
   acquire(&kmem.lock);
   r = kmem.freelist;
-  if(r)
+  if(r){
     kmem.freelist = r->next;
+    free_page_count--;// <--- 分配一页，自减
+  }
   release(&kmem.lock);
 
   if(r)

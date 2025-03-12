@@ -106,6 +106,7 @@ allocproc(void)
 
 found:
   p->pid = allocpid();
+  p->trace_mask = 0;  // 初始化为不跟踪
 
   // Allocate a trapframe page.
   if((p->trapframe = (struct trapframe *)kalloc()) == 0){
@@ -273,6 +274,9 @@ fork(void)
     release(&np->lock);
     return -1;
   }
+
+  np->trace_mask = p->trace_mask;  // 复制跟踪掩码
+
   np->sz = p->sz;
 
   np->parent = p;
@@ -693,3 +697,17 @@ procdump(void)
     printf("\n");
   }
 }
+
+int
+proc_count(void)
+{
+  struct proc *p;
+  int count = 0;
+  for(p = proc; p < &proc[NPROC]; p++){
+    if(p->state != UNUSED) {
+      count++;
+    }
+  }
+  return count;
+}
+
