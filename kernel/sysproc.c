@@ -49,6 +49,10 @@ sys_sbrk(void)
   addr = myproc()->sz;
   if(growproc(n) < 0)
     return -1;
+//  // 若为扩大内存，映射新增区域到内核页表
+//  if(n > 0){
+//    copy_user_mappings(myproc()->kernelpt, myproc()->pagetable, addr, addr + n);
+//  }
   return addr;
 }
 

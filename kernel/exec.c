@@ -75,6 +75,9 @@ exec(char *path, char **argv)
   sp = sz;
   stackbase = sp - PGSIZE;
 
+//  // 添加复制逻辑
+//  u2kvmcopy(pagetable, p->kernelpt, 0, sz);
+
   // Push argument strings, prepare rest of stack in ustack.
   for(argc = 0; argv[argc]; argc++) {
     if(argc >= MAXARG)
@@ -112,9 +115,29 @@ exec(char *path, char **argv)
   oldpagetable = p->pagetable;
   p->pagetable = pagetable;
   p->sz = sz;
+
+//  // 替换旧页表并同步到内核页表
+//  uvmunmap_proc_kpgtbl(p->kernelpt, 0, p->sz/PGSIZE, 0);
+//  if(copy_user_mappings(p->kernelpt, pagetable, 0, sz) < 0)
+//    goto bad;
+
   p->trapframe->epc = elf.entry;  // initial program counter = main
   p->trapframe->sp = sp; // initial stack pointer
   proc_freepagetable(oldpagetable, oldsz);
+
+  //这里我们将新的进程的内核页表装载其用户页表
+  if(utok_vmcopy(p->pagetable,p->kernelpt,0,p->sz) != 0){
+    goto bad;
+  }
+
+  //这里其实是我们这个lab中的一个小bug，这一步是我们自己应该想到加进去的，就是
+  //因为我们load进来了新的process,所以我们理应更新satp寄存器，然而原exec函数并未更新（其实这一点并
+  //不是我们的实验目的，但是为了正常运行，还是手动加上去吧）
+  w_satp(MAKE_SATP(p->kernelpt));
+  sfence_vma();
+
+  if (p->pid == 1)
+    vmprint(p->pagetable);
 
   return argc; // this ends up in a0, the first argument to main(argc, argv)
 
