@@ -86,6 +86,13 @@ enum procstate { UNUSED, SLEEPING, RUNNABLE, RUNNING, ZOMBIE };
 struct proc {
   struct spinlock lock;
 
+  int alarm_interval;         // 触发间隔（滴答数）
+  uint64 alarm_handler;       // 用户处理函数地址
+//  void (*alarm_handler)(); // 修改返回类型为 void
+  int alarm_ticks;            // 当前已过滴答数
+  int alarm_pending;          // 是否在处理中（防止重入）
+  struct trapframe alarm_tf;  // 保存用户上下文
+
   // p->lock must be held when using these:
   enum procstate state;        // Process state
   struct proc *parent;         // Parent process

@@ -119,6 +119,7 @@ panic(char *s)
 {
   pr.locking = 0;
   printf("panic: ");
+  backtrace(); // 添加回溯调用
   printf(s);
   printf("\n");
   panicked = 1; // freeze uart output from other CPUs
@@ -132,3 +133,53 @@ printfinit(void)
   initlock(&pr.lock, "pr");
   pr.locking = 1;
 }
+
+void backtrace(void) {
+  printf("backtrace:\n");
+  uint64 fp = r_fp(); // 当前帧指针
+  uint64 stack_page = PGROUNDDOWN(fp); // 当前栈页面的基地址
+
+  while (fp >= stack_page && fp < stack_page + PGSIZE) {
+    uint64 ra = *(uint64*)(fp - 8); // 返回地址在 fp-8
+    printf("%p\n", ra);
+    uint64 prev_fp = *(uint64*)(fp - 16); // 前一个帧指针在 fp-16
+
+    // 终止条件：prev_fp 无效或超出当前栈页面
+    if (prev_fp < stack_page || prev_fp >= stack_page + PGSIZE || prev_fp <= fp) {
+      break;
+    }
+    fp = prev_fp;
+  }
+}
+
+//void
+//backtrace(void) {
+//  printf("backtrace:\n");
+//  // 读取当前帧指针
+//  uint64 fp = r_fp();
+//  while (PGROUNDUP(fp) - PGROUNDDOWN(fp) == PGSIZE) {
+//    // 返回地址保存在-8偏移的位置
+//    uint64 ret_addr = *(uint64*)(fp - 8);
+//    printf("%p\n", ret_addr);
+//    // 前一个帧指针保存在-16偏移的位置
+//    fp = *(uint64*)(fp - 16);
+//  }
+//}
+
+////打印每个栈帧中保存的返回地址
+//void
+//backtrace(void)
+//{
+//  printf("backtrace:\n");
+//  uint64 cur = r_fp();
+//  uint64 pagetop = PGROUNDUP(cur);
+//
+//  while(cur < pagetop){
+//    uint64 rd = *(pte_t*)(cur-0x08);
+//    printf("%p\n",rd);
+//
+//    uint64 pre = *(pte_t*)(cur-0x10);
+//    cur = pre;
+//  }
+//
+//}

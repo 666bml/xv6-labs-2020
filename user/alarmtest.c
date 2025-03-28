@@ -34,6 +34,7 @@ periodic()
 {
   count = count + 1;
   printf("alarm!\n");
+//  sleep(500);//测试只有当sigreturn()执行完成之后，才会发生下一次alarm中断。
   sigreturn();
 }
 
