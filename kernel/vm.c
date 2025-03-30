@@ -5,6 +5,8 @@
 #include "riscv.h"
 #include "defs.h"
 #include "fs.h"
+#include "spinlock.h"  // 确保 spinlock 定义在前
+#include "proc.h"      // 包含 struct proc 的完整定义
 
 /*
  * the kernel's page table.
@@ -91,20 +93,55 @@ walk(pagetable_t pagetable, uint64 va, int alloc)
 // Look up a virtual address, return the physical address,
 // or 0 if not mapped.
 // Can only be used to look up user pages.
+// uint64
+// walkaddr(pagetable_t pagetable, uint64 va)
+// {
+//   pte_t *pte;
+//   uint64 pa;
+
+//   if(va >= MAXVA)
+//     return 0;
+
+//   pte = walk(pagetable, va, 0);
+//   if(pte == 0)
+//     return 0;
+//   if((*pte & PTE_V) == 0)
+//     return 0;
+//   if((*pte & PTE_U) == 0)
+//     return 0;
+//   pa = PTE2PA(*pte);
+//   return pa;
+// }
+
 uint64
 walkaddr(pagetable_t pagetable, uint64 va)
 {
   pte_t *pte;
   uint64 pa;
-
+  struct proc *p = myproc();
+  
   if(va >= MAXVA)
     return 0;
 
   pte = walk(pagetable, va, 0);
-  if(pte == 0)
-    return 0;
-  if((*pte & PTE_V) == 0)
-    return 0;
+//////////////////////////////////
+  if(pte == 0 || (*pte & PTE_V) == 0)
+  {
+    if (va >= p->sz || va < PGROUNDUP(p->trapframe->sp))
+      return 0;
+    uint64 ka = (uint64)kalloc();
+    if (ka == 0)
+    {
+      return 0;
+    }
+    // 因为考虑到系统调用，需要和之前额外添加PTE_X
+    if (mappages(p->pagetable, PGROUNDDOWN(va), PGSIZE, ka, PTE_W|PTE_X|PTE_R|PTE_U) != 0)
+    {
+      kfree((void*)ka);
+      return 0;
+    }
+    return ka;
+  }
   if((*pte & PTE_U) == 0)
     return 0;
   pa = PTE2PA(*pte);
@@ -181,10 +218,12 @@ uvmunmap(pagetable_t pagetable, uint64 va, uint64 npages, int do_free)
 
   for(a = va; a < va + npages*PGSIZE; a += PGSIZE){
     if((pte = walk(pagetable, a, 0)) == 0)
-      panic("uvmunmap: walk");
-    if((*pte & PTE_V) == 0)
-      panic("uvmunmap: not mapped");
-    if(PTE_FLAGS(*pte) == PTE_V)
+      continue;
+      // panic("uvmunmap: walk");
+    if((*pte & PTE_V) == 0)//walk函数返回非零但无效的PTE，是因为中间页表存在，但最终页表项未设置PTE_V，即没有对应的最终物理页
+      continue;
+      // panic("uvmunmap: not mapped");
+    if(PTE_FLAGS(*pte) == PTE_V)//确保 uvmunmap 函数只操作叶子页表项
       panic("uvmunmap: not a leaf");
     if(do_free){
       uint64 pa = PTE2PA(*pte);
@@ -315,9 +354,11 @@ uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)
 
   for(i = 0; i < sz; i += PGSIZE){
     if((pte = walk(old, i, 0)) == 0)
-      panic("uvmcopy: pte should exist");
+      continue;
+      // panic("uvmcopy: pte should exist");
     if((*pte & PTE_V) == 0)
-      panic("uvmcopy: page not present");
+      continue;
+      // panic("uvmcopy: page not present");
     pa = PTE2PA(*pte);
     flags = PTE_FLAGS(*pte);
     if((mem = kalloc()) == 0)
@@ -439,4 +480,18 @@ copyinstr(pagetable_t pagetable, char *dst, uint64 srcva, uint64 max)
   } else {
     return -1;
   }
+}
+
+
+// kernel/vm.c
+int lazy_alloc(struct proc *p, uint64 va) {
+  va = PGROUNDDOWN(va);
+  char *mem = kalloc();
+  if (mem == 0) return -1; // 内存不足
+  memset(mem, 0, PGSIZE);
+  if (mappages(p->pagetable, va, PGSIZE, (uint64)mem, PTE_W|PTE_R|PTE_U|PTE_X) != 0) {
+    kfree(mem);
+    return -1;
+  }
+  return 0;
 }

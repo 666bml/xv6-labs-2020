@@ -1,0 +1,85 @@
+1. 给sbrk添加处理参数为负数的情况，就是将growproc()中n<0的情况拿出来，注意n不能大于p->sz
+uint64
+sys_sbrk(void)
+{
+  int addr;
+  int n;
+
+  if(argint(0, &n) < 0)
+    return -1;
+  
+  struct proc* p = myproc();
+  addr = p->sz;
+  if (n < 0)
+  {
+    if (p->sz + n < 0) return -1;
+    else uvmdealloc(p->pagetable, p->sz, p->sz + n);
+  }
+  p->sz += n;
+  // if(growproc(n) < 0)
+  //   return -1;
+  return addr;
+}
+2. 当发现缺页异常时，读入虚拟地址比p->sz大，或者当虚拟地址比进程的用户栈还小，或者申请空间不够的时候终止进程
+
+///////////////////////////////////////////////////////// 
+ else if (r_scause() == 15 || r_scause() == 13)
+  {
+    uint64 va = r_stval();
+    if (va < p->sz && va >= PGROUNDUP(p->trapframe->sp))//UP是页的高地址，DOWN是页的低地址，页边界都是页的起始地址
+    {
+      uint64 ka = (uint64) kalloc();
+      if (ka == 0) p->killed = -1;
+      else
+      {
+        memset((void*)ka, 0, PGSIZE);
+        va = PGROUNDDOWN(va);
+        if (mappages(p->pagetable, va, PGSIZE, ka, PTE_U | PTE_W| PTE_R) != 0)
+        {
+          kfree((void*)ka);
+          p->killed = -1;
+        }
+      }
+    } 
+    else p->killed = -1;
+////////////////////////////////////////////////////////
+3. 然后是对fork函数进行修改，子进程复制父进程地址空间的时候，发现地址空间不存在时需要忽略
+
+int
+uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)
+{
+////////////////////////////////////////////////////////////
+    if((pte = walk(old, i, 0)) == 0)//懒惰分配的虚拟地址代入的输出理论上只有0
+      continue;
+    if((*pte & PTE_V) == 0)//walk函数返回非零但无效的PTE，是因为中间页表存在，但最终页表项未设置PTE_V，即没有对应的最终物理页。
+      continue;
+////////////////////////////////////////////////////////////
+}
+4. 最后就是当系统调用时，得到地址如果找不到相应的物理地址时需要，添加相应物理地址映射到page table里，这里关键就是要找到系统调用时，虚拟地址转换为物理地址的代码在哪，哦，原来exec.c里，那没事了，可以发现exec函数将虚拟地址传入walkaddr函数里得到相应物理地址，所以将3.2代码部分重复处理一下就好
+
+uint64
+walkaddr(pagetable_t pagetable, uint64 va)
+{
+//////////////////////////////////
+  if(pte == 0 || (*pte & PTE_V) == 0)
+  {
+    if (va >= p->sz || va < PGROUNDUP(p->trapframe->sp))
+      return 0;
+    uint64 ka = (uint64)kalloc();
+    if (ka == 0)
+    {
+      return 0;
+    }
+    // 因为考虑到系统调用，需要和之前额外添加PTE_X
+    if (mappages(p->pagetable, PGROUNDDOWN(va), PGSIZE, ka, PTE_W|PTE_X|PTE_R|PTE_U) != 0)
+    {
+      kfree((void*)ka);
+      return 0;
+    }
+    return ka;
+  }
+  if((*pte & PTE_U) == 0)
+    return 0;
+  pa = PTE2PA(*pte);
+  return pa;
+}

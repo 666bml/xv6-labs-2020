@@ -1,0 +1,63 @@
+这里就是开始实现Lazy alloction的一部分，写完这部分可以让我们的echo hi运行成功，但是lazytests什么的是过不了的（ps: 这部分视频也有讲解，太爽了）
+
+1. 因为上个部分只是对sys_sbrk做了一个简单修改，故会引发page fault异常，所以我们要将这个异常截取然后做处理，hints告诉我们可以在usertrap函数里，检查r_scause()函数返回值是否为15或者13，然后通过r_stval函数获取出现问题的虚拟地址
+
+2. 我们知道了获取方法后，然后就是要申请内存给出现异常的虚拟地址，这里可以参考vm.c里的uvmalloc()函数里的代码，添加到usertrap里
+
+///////////////////////////////////////////////////////////////////  
+} else if((which_dev = devintr()) != 0){
+    // ok
+  } 
+  else if (r_scause() == 15 || r_scause() == 13)
+  {
+    uint64 va = r_stval();
+    if (va < p->sz && va > PGROUNDDOWN(p->trapframe->sp))
+    {
+      uint64 ka = (uint64) kalloc();
+      if (ka == 0) p->killed = -1;
+      else
+      {
+        memset((void*)ka, 0, PGSIZE);
+        va = PGROUNDDOWN(va);
+        if (mappages(p->pagetable, va, PGSIZE, ka, PTE_U | PTE_W| PTE_R) != 0)
+        {
+          kfree((void*)ka);
+          p->killed = -1;
+        }
+      }
+    } 
+    else p->killed = -1;
+  }
+  else {
+    printf("usertrap(): unexpected scause %p pid=%d\n", r_scause(), p->pid);
+    printf("            sepc=%p stval=%p\n", r_sepc(), r_stval());
+    p->killed = 1;
+  }
+/////////////////////////////////////////////////////
+3. 添加完之后uvmunmap函数仍然会报错uvmunmap: not mapped，这里因为这里实际上却是没有内存找不到相应的物理地址，故需要continue忽略这块，同理之后运行lazytests的时候还会产生uvmunmap: walk异常也需要忽略
+
+// Remove npages of mappings starting from va. va must be
+// page-aligned. The mappings must exist.
+// Optionally free the physical memory.
+void
+uvmunmap(pagetable_t pagetable, uint64 va, uint64 npages, int do_free)
+{
+/////////////////////////////////////////////////
+    if((pte = walk(pagetable, a, 0)) == 0)
+      // panic("uvmunmap: walk");
+      continue;
+    if((*pte & PTE_V) == 0)
+      // panic("uvmunmap: not mapped");
+      continue;
+/////////////////////////////////////////////////
+}
+然后可以成功echo hi
+
+xv6 kernel is booting
+
+hart 1 starting
+hart 2 starting
+init: starting sh
+$ echo hi
+hi
+$ 
