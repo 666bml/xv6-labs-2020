@@ -1,0 +1,13 @@
+{
+    "files.associations": {
+        "fcntl.h": "c",
+        "file.h": "c",
+        "cmath": "c",
+        "type_traits": "c",
+        "limits": "c",
+        "typeinfo": "c",
+        "stat.h": "c",
+        "proc.h": "c",
+        "fs.h": "c"
+    }
+}
