@@ -99,3 +99,20 @@ sys_uptime(void)
   release(&tickslock);
   return xticks;
 }
+
+// 在 kernel/sysproc.c 添加统计输出系统调用
+uint64
+sys_getreadstats(void) {
+  struct proc *p = myproc();
+  if(p->sys_read_count == 0) return 0;
+  
+  uint64 avg = p->sys_read_cycles / p->sys_read_count;
+  printf("sys_read avg cycles: %d\n", avg);
+  
+  // 重置统计
+  p->sys_read_cycles = 0;
+  p->sys_read_count = 0;
+  
+  return avg;
+}
+

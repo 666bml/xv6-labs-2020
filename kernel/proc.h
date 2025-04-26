@@ -104,4 +104,6 @@ struct proc {
   struct inode *cwd;           // Current directory
   char name[16];               // Process name (debugging)
   pagetable_t kernelpt;        // 进程的内核页表
+  uint64 sys_read_cycles;   // 累计 read 系统调用周期数
+  uint64 sys_read_count;    // read 调用次数
 };

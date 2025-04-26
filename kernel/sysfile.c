@@ -66,17 +66,47 @@ sys_dup(void)
   return fd;
 }
 
+// uint64
+// sys_read(void)
+// {
+//   struct file *f;
+//   int n;
+//   uint64 p;
+
+//   if(argfd(0, 0, &f) < 0 || argint(2, &n) < 0 || argaddr(1, &p) < 0)
+//     return -1;
+//   return fileread(f, p, n);
+// }
+
+// 修改后的 sys_read 函数
 uint64
 sys_read(void)
 {
+  struct proc *p = myproc();
+  uint64 start, end;
+
+  start = r_cycle();  // 使用r_cycle代替r_time
+
   struct file *f;
   int n;
-  uint64 p;
+  uint64 paddr;
 
-  if(argfd(0, 0, &f) < 0 || argint(2, &n) < 0 || argaddr(1, &p) < 0)
+  if(argfd(0, 0, &f) < 0 || argaddr(1, &paddr) < 0 || argint(2, &n) < 0){
+    end = r_cycle();
+    p->sys_read_cycles += (end - start);
+    p->sys_read_count++;
     return -1;
-  return fileread(f, p, n);
+  }
+
+  int ret = fileread(f, paddr, n);
+
+  end = r_cycle();
+  p->sys_read_cycles += (end - start);
+  p->sys_read_count++;
+
+  return ret;
 }
+
 
 uint64
 sys_write(void)

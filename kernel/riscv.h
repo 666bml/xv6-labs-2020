@@ -352,3 +352,13 @@ sfence_vma()
 
 typedef uint64 pte_t;
 typedef uint64 *pagetable_t; // 512 PTEs
+
+extern uint ticks;  // 声明外部变量
+// 读取 CPU cycle counter，更高精度
+static inline uint64
+r_cycle() {
+  uint64 x;
+  asm volatile("rdcycle %0" : "=r" (x));
+  return x;
+}
+
